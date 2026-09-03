@@ -60,6 +60,12 @@ DOT : "."
 EQ : /[ \t]*=(?!=|>)/
 COLON : /[ \t]*:(?!:)/
 DBLQUOTE : "\""
+// There is deliberately no terminal for escaped delimiters (\"...\").
+// Terraform writes a string inside a directive or an interpolation with
+// plain delimiters -- "%{ if x == "y" }t%{ endif }" -- because the braces
+// let its scanner track the nesting. The escaped spelling is a syntax
+// error there, so accepting it here would let a document parse that
+// Terraform rejects. See #353.
 
 // Interpolation
 INTERP_START : "${"

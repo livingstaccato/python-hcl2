@@ -90,7 +90,6 @@ NAME = StringToken["NAME"]  # type: ignore
 STRING_CHARS = StringToken["STRING_CHARS"]  # type: ignore
 ESCAPED_INTERPOLATION = StringToken["ESCAPED_INTERPOLATION"]  # type: ignore
 ESCAPED_DIRECTIVE = StringToken["ESCAPED_DIRECTIVE"]  # type: ignore
-TEMPLATE_STRING = StringToken["TEMPLATE_STRING"]  # type: ignore
 BINARY_OP = StringToken["BINARY_OP"]  # type: ignore
 HEREDOC_TEMPLATE = StringToken["HEREDOC_TEMPLATE"]  # type: ignore
 HEREDOC_TRIM_TEMPLATE = StringToken["HEREDOC_TRIM_TEMPLATE"]  # type: ignore

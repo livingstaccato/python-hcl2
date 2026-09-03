@@ -626,8 +626,8 @@ class TestHeredocFlattenedToValue(TestCase):
         )
 
 
-class TestStringDelimitersInsideATemplateDirective(TestCase):
-    r"""A directive's condition is expression source, so its strings are plain.
+class TestStringDelimitersInsideATemplateSpan(TestCase):
+    r"""A directive or interpolation is expression source, so its strings are plain.
 
     Terraform writes `"%{ if x == "y" }t%{ endif }"`: the braces let its scanner
     track the nesting, so the inner delimiters need no escaping and escaping

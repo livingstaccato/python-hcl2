@@ -15,7 +15,6 @@ from hcl2.rules.tokens import (
     INTERP_START,
     RBRACE,
     STRING_CHARS,
-    TEMPLATE_STRING,
 )
 from hcl2.utils import (
     HEREDOC_PATTERN,
@@ -240,40 +239,3 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
         sep = "\\n" if not options.preserve_heredocs else "\n"
         inner = sep.join(lines)
         return '"' + inner + '"'
-
-
-class TemplateStringRule(LarkRule):
-    """Rule for escaped-quote-delimited strings in template expressions (\\\"...\\\" )."""
-
-    _children_layout: Tuple[TEMPLATE_STRING]
-
-    @staticmethod
-    def lark_name() -> str:
-        """Return the grammar rule name."""
-        return "template_string"
-
-    @property
-    def raw_value(self) -> str:
-        """Return the raw token value including escaped quotes."""
-        return str(self._children[0].value)
-
-    @property
-    def inner_value(self) -> str:
-        """Return the string content without the escaped quote delimiters."""
-        raw = self.raw_value
-        # Strip leading \" and trailing \"
-        if raw.startswith('\\"') and raw.endswith('\\"'):
-            return raw[2:-2]
-        return raw
-
-    def serialize(self, options=SerializationOptions(), context=SerializationContext()) -> Any:
-        """Serialize preserving escaped-quote delimiters for round-trip fidelity.
-
-        Inside template directive expressions, strings are delimited by \\"
-        rather than plain ". We preserve these as \\" in serialized form so
-        the deserializer can reconstruct them correctly.
-        """
-        raw = self.raw_value
-        if options.strip_string_quotes:
-            return self.inner_value
-        return raw

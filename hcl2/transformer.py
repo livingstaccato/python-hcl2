@@ -65,7 +65,6 @@ from hcl2.rules.strings import (
     InterpolationRule,
     StringPartRule,
     StringRule,
-    TemplateStringRule,
 )
 from hcl2.rules.tokens import (
     NAME,
@@ -434,7 +433,3 @@ class RuleTransformer(Transformer):
     @v_args(meta=True)
     def template_endfor(self, meta: Meta, args) -> TemplateEndforRule:
         return TemplateEndforRule(args, meta)
-
-    @v_args(meta=True)
-    def template_string(self, meta: Meta, args) -> TemplateStringRule:
-        return TemplateStringRule(args, meta)
