@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `strings_to_heredocs` leaves a value carrying a lone carriage return quoted. A heredoc body is read literally, so it can hold a `\r` only where one ends a line: OpenTofu rejects `<<EOF\nx\ry\nEOF` with "No closing marker was found for the string", while the quoted `"x\ry\n"` it came from is valid. Such a value stays quoted, for the same reason one that does not end in a newline does.
 - `strings_to_heredocs` picks a delimiter the body cannot close. It wrote `<<EOF` over every value, so a string holding a line reading `EOF` -- a log excerpt, a shell script, an embedded config, the payloads heredocs are for -- ended its own heredoc early and produced a file that no longer parsed. A numbered variant is used when the body occupies `EOF`, and ordinary values are written exactly as before. The lines that count as markers are Terraform's, which are looser than this grammar's: OpenTofu ends a heredoc on `EOF  ` while `HEREDOC_TEMPLATE` here requires the newline to follow the word. A CRLF body counts too -- it is split on `\n`, so its lines carry their own `\r`, and OpenTofu ends a heredoc on `EOF\r` as readily as on `EOF `. ([#330](https://github.com/amplify-education/python-hcl2/issues/330))
 - `strings_to_heredocs` no longer adds a line to the body it writes. The value's own trailing newline is the one that precedes the closing marker, so a heredoc was being emitted one line longer than the string it came from. A value that does not end in a newline is now left as a quoted string, since no heredoc can express it. Flattening a document and restoring it now yields HCL that OpenTofu evaluates identically to the original; five of the eleven values in the round-trip fixture did not survive it before.
+### Added
+
+- `BlockView.start_line` and `BlockView.end_line`, so a block's span can be read from the query API without serializing it. `with_meta` puts the numbers in the output dict, which meant reaching them through the label nesting, or through the rule's private `_meta`. Both are `None` for a tree built by the deserializer, which carries no positions. `hq` picks them up through its property accessors: `hq 'resource[*] | .start_line' main.tf`.
+
+### Fixed
+
+- `with_meta` emits `__start_line__` and `__end_line__` again. The option, the `hcl2tojson --with-meta` flag and the migration guide's promise that the v7 keys are "still available" all survived the v8 rewrite; the code that produced the keys did not, leaving the option read nowhere in the package. Blocks are annotated with the same spans 7.3.1 produced for the same input. ([#291](https://github.com/amplify-education/python-hcl2/issues/291))
 
 ## \[8.1.3\] - 2026-08-26
 
