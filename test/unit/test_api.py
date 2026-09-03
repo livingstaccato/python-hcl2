@@ -657,3 +657,19 @@ class TestStringDelimitersInsideATemplateDirective(TestCase):
     def test_the_escaped_spelling_is_rejected(self):
         with self.assertRaises(UnexpectedInput):
             loads(self.ESCAPED)
+
+    def test_an_interpolation_is_covered_too(self):
+        """The terminal was reachable from any expression, not only a directive.
+
+        `"${var.foo == \"bar\" ? 1 : 2}"` parsed here and is rejected by
+        OpenTofu v1.12.5 for the same reason -- *Invalid character* -- while the
+        plain `"${var.foo == "bar" ? 1 : 2}"` evaluates to 1. Removing the
+        terminal covers both spellings; this pins the one the commit message
+        did not name.
+        """
+        with self.assertRaises(UnexpectedInput):
+            loads('a = "${var.foo == \\"bar\\" ? 1 : 2}"\n')
+        self.assertEqual(
+            loads('a = "${var.foo == "bar" ? 1 : 2}"\n'),
+            {"a": '"${var.foo == "bar" ? 1 : 2}"'},
+        )
