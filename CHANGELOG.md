@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## \[Unreleased\]
 
-- Nothing yet.
+### Fixed
+
+- A string literal inside a template directive is written with plain delimiters, the way Terraform writes it. A `TEMPLATE_STRING` terminal also accepted the escaped spelling -- `"%{ if x == \"y\" }t%{ endif }"` -- which OpenTofu v1.12.5 rejects outright (*Invalid character: this character is not used within the language*), so a document could parse here and then fail in Terraform. The terminal arrived alongside the fixture for #247, but #247 reported the plain spelling (`"kms%{ if var.id != "primary" }-${var.id}%{ endif }"`), which still parses; the escaped form appeared only in the fixture, and reads like a config transcribed through a Python string literal. ([#353](https://github.com/amplify-education/python-hcl2/issues/353))
 
 ## \[8.1.3\] - 2026-08-26
 

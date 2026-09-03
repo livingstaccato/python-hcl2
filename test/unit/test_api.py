@@ -2,6 +2,7 @@
 from io import StringIO
 from unittest import TestCase
 
+from lark.exceptions import UnexpectedInput
 from lark.tree import Tree
 
 from hcl2.api import (
@@ -623,3 +624,36 @@ class TestHeredocFlattenedToValue(TestCase):
             loads(source, serialization_options=self._SOURCE),
             {"a": '"say \\"hi\\"\\nback\\\\slash"'},
         )
+
+
+class TestStringDelimitersInsideATemplateDirective(TestCase):
+    r"""A directive's condition is expression source, so its strings are plain.
+
+    Terraform writes `"%{ if x == "y" }t%{ endif }"`: the braces let its scanner
+    track the nesting, so the inner delimiters need no escaping and escaping
+    them is a syntax error. OpenTofu v1.12.5 rejects the escaped spelling with
+    *Invalid character -- this character is not used within the language*, and
+    evaluates the plain one to `t`.
+
+    The escaped spelling used to parse here, via a `TEMPLATE_STRING` terminal
+    added alongside the #247 fixture. #247 itself reported the plain spelling
+    (`"kms%{ if var.id != "primary" }-${var.id}%{ endif }"`), so nothing that
+    issue was filed for depends on the escaped form.
+    """
+
+    ESCAPED = 'a = "%{ if x == \\"y\\" }t%{ endif }"\n'
+    PLAIN = 'a = "%{ if x == "y" }t%{ endif }"\n'
+
+    def test_the_plain_spelling_parses(self):
+        self.assertEqual(loads(self.PLAIN), {"a": '"%{ if x == "y" }t%{ endif }"'})
+
+    def test_the_issue_247_config_parses(self):
+        source = 'service = "kms%{ if var.id != "primary" }-${var.id}%{ endif }"\n'
+        self.assertEqual(
+            loads(source),
+            {"service": '"kms%{ if var.id != "primary" }-${var.id}%{ endif }"'},
+        )
+
+    def test_the_escaped_spelling_is_rejected(self):
+        with self.assertRaises(UnexpectedInput):
+            loads(self.ESCAPED)

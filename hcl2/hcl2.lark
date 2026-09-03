@@ -60,10 +60,6 @@ DOT : "."
 EQ : /[ \t]*=(?!=|>)/
 COLON : /[ \t]*:(?!:)/
 DBLQUOTE : "\""
-// Escaped-quote string inside template directives: matches \"content\"
-// (Lark escape-processes the regex, so the compiled pattern is \\?"(...)\\?" —
-// i.e. one literal backslash + quote as delimiters.)
-TEMPLATE_STRING.3 : /\\\\"(?:[^"\\\\]|\\\\.)*\\\\"/
 
 // Interpolation
 INTERP_START : "${"
@@ -204,7 +200,6 @@ expr_term : LPAR new_line_or_comment? expression new_line_or_comment? RPAR
             | float_lit
             | int_lit
             | string
-            | template_string
             | tuple
             | object
             | identifier
@@ -218,8 +213,6 @@ expr_term : LPAR new_line_or_comment? expression new_line_or_comment? RPAR
             | full_splat_expr_term
             | for_tuple_expr
             | for_object_expr
-
-template_string : TEMPLATE_STRING
 
 // Collections
 tuple : LSQB new_line_or_comment? (expression new_line_or_comment? COMMA new_line_or_comment?)* (expression new_line_or_comment? COMMA? new_line_or_comment?)?  RSQB
