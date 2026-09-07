@@ -40,31 +40,31 @@ class TestAHeredocInsideAnExpression(TestCase):
         return loads(source, serialization_options=VALUE)["a"]
 
     def test_it_stays_a_string(self):
-        self.assertEqual(self.value("a = upper(<<E\nx\nE\n)\n"), '${upper("x")}')
+        self.assertEqual(self.value("a = upper(<<E\nx\nE\n)\n"), '${upper("x\\n")}')
 
     def test_it_matches_the_quoted_equivalent(self):
         self.assertEqual(
             self.value("a = upper(<<E\nx\nE\n)\n"),
-            self.value('a = upper("x")\n'),
+            self.value('a = upper("x\\n")\n'),
         )
 
     def test_a_multi_line_body_does_not_splice_raw_newlines(self):
         result = self.value("a = upper(<<E\nx\ny\nE\n)\n")
-        self.assertEqual(result, '${upper("x\\ny")}')
+        self.assertEqual(result, '${upper("x\\ny\\n")}')
         self.assertNotIn("\n", result)
 
     def test_the_trim_form_too(self):
-        self.assertEqual(self.value("a = upper(<<-E\n  x\n  E\n)\n"), '${upper("x")}')
+        self.assertEqual(self.value("a = upper(<<-E\n  x\n  E\n)\n"), '${upper("x\\n")}')
 
     def test_a_heredoc_that_is_not_in_an_expression_is_unaffected(self):
         # Nothing wraps this one, so the caller does get the bare body.
-        self.assertEqual(self.value("a = <<E\nx\nE\n"), "x")
+        self.assertEqual(self.value("a = <<E\nx\nE\n"), "x\n")
 
     def test_a_heredoc_in_a_container_is_unaffected(self):
         # A tuple element and an object value are values, not expression
         # source, so they keep handing back the body.
-        self.assertEqual(self.value("a = [<<E\nx\nE\n]\n"), ["x"])
-        self.assertEqual(self.value("a = {k = <<E\nx\nE\n}\n"), {"k": "x"})
+        self.assertEqual(self.value("a = [<<E\nx\nE\n]\n"), ["x\n"])
+        self.assertEqual(self.value("a = {k = <<E\nx\nE\n}\n"), {"k": "x\n"})
 
 
 class TestEveryExpressionContextQuotesIt(TestCase):
@@ -80,22 +80,22 @@ class TestEveryExpressionContextQuotesIt(TestCase):
         return loads(source, serialization_options=VALUE)["a"]
 
     def test_a_nested_call(self):
-        self.assertEqual(self.value("a = upper(lower(<<E\nx\nE\n))\n"), '${upper(lower("x"))}')
+        self.assertEqual(self.value("a = upper(lower(<<E\nx\nE\n))\n"), '${upper(lower("x\\n"))}')
 
     def test_a_later_argument(self):
-        self.assertEqual(self.value('a = join(",", <<E\nx\nE\n)\n'), '${join(",", "x")}')
+        self.assertEqual(self.value('a = join(",", <<E\nx\nE\n)\n'), '${join(",", "x\\n")}')
 
     def test_a_binary_operand(self):
-        self.assertEqual(self.value("a = b + <<E\nx\nE\n"), '${b + "x"}')
+        self.assertEqual(self.value("a = b + <<E\nx\nE\n"), '${b + "x\\n"}')
 
     def test_a_conditional_branch(self):
-        self.assertEqual(self.value('a = c ? <<E\nx\nE\n : "z"\n'), '${c ? "x" : "z"}')
+        self.assertEqual(self.value('a = c ? <<E\nx\nE\n : "z"\n'), '${c ? "x\\n" : "z"}')
 
     def test_an_indexed_tuple_inside_a_call(self):
-        self.assertEqual(self.value("a = upper([<<E\nx\nE\n][0])\n"), '${upper(["x"][0])}')
+        self.assertEqual(self.value("a = upper([<<E\nx\nE\n][0])\n"), '${upper(["x\\n"][0])}')
 
     def test_an_interpolation_in_a_quoted_string(self):
-        self.assertEqual(self.value('a = "${upper(<<E\nx\nE\n)}"\n'), '${upper("x")}')
+        self.assertEqual(self.value('a = "${upper(<<E\nx\nE\n)}"\n'), '${upper("x\\n")}')
 
     def test_none_of_them_leak_a_raw_newline(self):
         for source in (
@@ -151,7 +151,7 @@ class TestTheOtherModesAreUntouched(TestCase):
 
     def test_a_heredoc_argument_keeps_its_quoted_source(self):
         self.assertEqual(
-            loads("a = upper(<<E\nx\nE\n)\n", serialization_options=SOURCE)["a"], '${upper("x")}'
+            loads("a = upper(<<E\nx\nE\n)\n", serialization_options=SOURCE)["a"], '${upper("x\\n")}'
         )
 
     def test_default_options_keep_the_heredoc_as_quoted_source(self):
