@@ -218,10 +218,16 @@ class HeredocTemplateRule(LarkRule):
             if not match:
                 raise RuntimeError(f"Invalid Heredoc token: {heredoc}")
             heredoc = _strip_closing_marker_indent(match.group(2))
-            if options.strip_string_quotes:
+            if options.strip_string_quotes and not context.inside_dollar_string:
                 # The caller asked for the value: real newlines, no escaping.
                 # `$${` and `%%{` are resolved, being escapes for a literal
                 # `${` and `%{` rather than characters of the value.
+                #
+                # Inside an expression the heredoc is an argument, and its text
+                # is part of that expression's source: `upper(<<E\nx\nE\n)` has
+                # to come back as `upper("x")`, not `upper(x)`, which asks for a
+                # variable nobody declared. `StringRule` checks the same flag
+                # one class away, for the same reason.
                 return resolve_escaped_markers(heredoc)
             # Only the literal spans are escaped. Inside `${...}` the text is
             # expression source, and escaping a quote there rewrites someone
@@ -235,7 +241,7 @@ class HeredocTemplateRule(LarkRule):
             return '"' + map_literal_spans(heredoc, _escape_for_quoted_source) + '"'
 
         result = heredoc.rstrip(self._trim_chars)
-        if options.strip_string_quotes:
+        if options.strip_string_quotes and not context.inside_dollar_string:
             return result
         return f'"{result}"'
 
@@ -267,7 +273,7 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
             if not match:
                 raise RuntimeError(f"Invalid Heredoc token: {heredoc}")
             body = "\n".join(self._dedent(_strip_closing_marker_indent(match.group(2))))
-            if options.strip_string_quotes:
+            if options.strip_string_quotes and not context.inside_dollar_string:
                 # The caller asked for the value: real newlines, no escaping.
                 return resolve_escaped_markers(body)
             if has_multi_line_span(body):
@@ -275,7 +281,7 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
             return '"' + map_literal_spans(body, _escape_for_quoted_source) + '"'
 
         result = heredoc.rstrip(self._trim_chars)
-        if options.strip_string_quotes:
+        if options.strip_string_quotes and not context.inside_dollar_string:
             return result
         return f'"{result}"'
 
@@ -341,9 +347,15 @@ class TemplateStringRule(LarkRule):
         Inside template directive expressions, strings are delimited by \\"
         rather than plain ". We preserve these as \\" in serialized form so
         the deserializer can reconstruct them correctly.
+
+        `strip_string_quotes` asks for a value, and this rule only ever appears
+        inside a directive -- where the text is expression source and the
+        delimiters belong to a string literal written in it. Dropping them
+        there turned `%{ if x == "y" }` into `%{ if x == y }`: a comparison
+        against a variable rather than against a string.
         """
         options = options if options is not None else SerializationOptions()
         raw = self.raw_value
-        if options.strip_string_quotes:
+        if options.strip_string_quotes and not context.inside_dollar_string:
             return self.inner_value
         return raw
