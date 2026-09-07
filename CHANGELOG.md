@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## \[Unreleased\]
 
+### Added
+
+- `SerializationOptions.metadata_sidecar`, which carries `__is_block__`, `__comments__` and `__inline_comments__` beside the mapping rather than among its keys. HCL reserves none of those names, so a document may declare an attribute called any of them -- and in-band one of the two has to lose: on read the marker overwrites the attribute, on write the deserializer drops it, and by then the dict holds a single value with no way to tell which happened. With the option set, `loads` returns an `HclDict`, a `dict` subclass whose `hcl_meta` holds the three, so the mapping contains attributes and nothing else. `dumps` accepts either form, including a hand-built dict using the old keys. Off by default: the keys are a documented part of the output shape, and JSON cannot carry a sidecar. `HclDict`, `HclMeta` and `meta_of` are exported from `hcl2`. Copying, merging with `|` and pickling carry the metadata; `dict(d)` and `{**d}` deliberately do not, since asking for a `dict` gives the mapping and nothing else. ([#331](https://github.com/amplify-education/python-hcl2/issues/331))
 ### Fixed
 
 - A heredoc whose interpolation spans lines is not flattened. The quoted form cannot hold one: the newlines inside `${...}` are expression source, where OpenTofu rejects an escaped newline and a raw one makes the string span lines, which it also rejects. It used to emit the raw version -- output neither Terraform nor this library could read, written with no error -- and now hands the heredoc back in the form `preserve_heredocs=True` produces, which reads back as that heredoc. Declining is the only answer that does not change what the document means. ([#347](https://github.com/amplify-education/python-hcl2/issues/347))

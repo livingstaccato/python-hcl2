@@ -5,7 +5,8 @@ from typing import Any, List, Optional, Tuple, Union
 
 from lark.tree import Meta
 
-from hcl2.const import END_LINE, INLINE_COMMENTS_KEY, IS_BLOCK, START_LINE
+from hcl2.const import COMMENTS_KEY, END_LINE, INLINE_COMMENTS_KEY, IS_BLOCK, START_LINE
+from hcl2.meta import HclDict, HclMeta, meta_of
 from hcl2.rules.abstract import LarkRule, LarkToken
 from hcl2.rules.expressions import ExprTermRule
 from hcl2.rules.literal_rules import IdentifierRule
@@ -95,9 +96,16 @@ class BodyRule(LarkRule):
                 if child_comments:
                     comments.extend(child_comments)
 
+        if options.metadata_sidecar:
+            meta = HclMeta()
+            if options.with_comments:
+                meta.comments = comments
+                meta.inline_comments = inline_comments
+            return HclDict(result.items(), meta=meta)
+
         if options.with_comments:
             if comments:
-                result["__comments__"] = comments
+                result[COMMENTS_KEY] = comments
             if inline_comments:
                 result[INLINE_COMMENTS_KEY] = inline_comments
 
@@ -167,7 +175,11 @@ class BlockRule(LarkRule):
         context = context if context is not None else SerializationContext()
         result = self._body.serialize(options, context)
         if options.explicit_blocks:
-            result.update({IS_BLOCK: True})
+            meta = meta_of(result)
+            if meta is not None:
+                meta.is_block = True
+            else:
+                result.update({IS_BLOCK: True})
         if options.with_meta:
             # Alongside the body, not wrapping it: the keys land on the same
             # innermost dict the labels nest around, which is where v7 put them.
