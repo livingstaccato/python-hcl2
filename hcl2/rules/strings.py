@@ -355,6 +355,7 @@ class TemplateStringRule(LarkRule):
         against a variable rather than against a string.
         """
         options = options if options is not None else SerializationOptions()
+        context = context if context is not None else SerializationContext()
         raw = self.raw_value
         if options.strip_string_quotes and not context.inside_dollar_string:
             return self.inner_value
