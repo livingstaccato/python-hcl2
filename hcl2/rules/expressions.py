@@ -37,10 +37,11 @@ class ExpressionRule(InlineCommentMixIn, ABC):
     def _wrap_into_parentheses(
         self,
         value: str,
-        _options=SerializationOptions(),
-        context=SerializationContext(),
+        _options: Optional[SerializationOptions] = None,
+        context: Optional[SerializationContext] = None,
     ) -> str:
         """Wrap value in parentheses if inside a nested expression."""
+        context = context if context is not None else SerializationContext()
         # do not wrap into parentheses if
         #   1. already wrapped or
         #   2. is top-level expression (unless explicitly wrapped)
@@ -98,16 +99,20 @@ class ExprTermRule(ExpressionRule):
         """Return the inner expression."""
         return self._children[2]
 
-    def serialize(self, options=SerializationOptions(), context=SerializationContext()) -> Any:
+    def serialize(
+        self, options: Optional[SerializationOptions] = None, context: Optional[SerializationContext] = None
+    ) -> Any:
         """Serialize, handling parenthesized expression wrapping."""
+        options = options if options is not None else SerializationOptions()
+        context = context if context is not None else SerializationContext()
         # Not `or context.inside_parentheses`: the flag answers "did my
         # immediate parent already wrap me", which `_wrap_into_parentheses`
-        # reads to avoid doubling them, and `or` made it mean "some ancestor
-        # is parenthesised". Clearing it in the operation rules is what fixes
-        # the output; this keeps the flag matching its meaning at the source,
-        # so a term that is not itself wrapped never claims to be.
-        with context.modify(inside_parentheses=self.parentheses):
-            result = self.expression.serialize(options, context)
+        # reads to avoid doubling them, and `or` makes it mean "some ancestor
+        # is parenthesised". Clearing it in the operation rules is what lets
+        # the option reach inside; this keeps the flag matching its meaning at
+        # the source, so a term that is not itself wrapped never claims to be.
+        inner = context.replace(inside_parentheses=self.parentheses)
+        result = self.expression.serialize(options, inner)
 
         if self.parentheses:
             result = wrap_into_parentheses(result)
@@ -156,19 +161,22 @@ class ConditionalRule(ExpressionRule):
         """Return the false-branch expression."""
         return self._children[8]
 
-    def serialize(self, options=SerializationOptions(), context=SerializationContext()) -> Any:
+    def serialize(
+        self, options: Optional[SerializationOptions] = None, context: Optional[SerializationContext] = None
+    ) -> Any:
         """Serialize to ternary expression string."""
+        options = options if options is not None else SerializationOptions()
+        context = context if context is not None else SerializationContext()
         # `inside_parentheses=False`: nothing wraps an operand, so whatever
-        # wrapped this operation says nothing about them. Leaving it set is
-        # what stopped `force_operation_parentheses` reaching inside `(...)`.
-        # The check after the block still reads the outer value, which is the
-        # one that says whether *this* result is already wrapped.
-        with context.modify(inside_dollar_string=True, inside_parentheses=False):
-            result = (
-                f"{self.condition.serialize(options, context)} "
-                f"? {self.if_true.serialize(options, context)} "
-                f": {self.if_false.serialize(options, context)}"
-            )
+        # wrapped this operation says nothing about them. `context` below is
+        # the outer one, which is the value that says whether *this* result is
+        # already wrapped.
+        inner = context.replace(inside_dollar_string=True, inside_parentheses=False)
+        result = (
+            f"{self.condition.serialize(options, inner)} "
+            f"? {self.if_true.serialize(options, inner)} "
+            f": {self.if_false.serialize(options, inner)}"
+        )
 
         if not context.inside_dollar_string:
             result = to_dollar_string(result)
@@ -208,8 +216,12 @@ class BinaryTermRule(ExpressionRule):
         """Return the right-hand operand."""
         return self._children[3]
 
-    def serialize(self, options=SerializationOptions(), context=SerializationContext()) -> Any:
+    def serialize(
+        self, options: Optional[SerializationOptions] = None, context: Optional[SerializationContext] = None
+    ) -> Any:
         """Serialize to 'operator operand' string."""
+        options = options if options is not None else SerializationOptions()
+        context = context if context is not None else SerializationContext()
         op_str = self.binary_operator.serialize(options, context)
         term_str = self.expr_term.serialize(options, context)
         return f"{op_str} {term_str}"
@@ -275,12 +287,16 @@ class BinaryOpRule(ExpressionRule):
             return trailing.to_list() or []
         return []
 
-    def serialize(self, options=SerializationOptions(), context=SerializationContext()) -> Any:
+    def serialize(
+        self, options: Optional[SerializationOptions] = None, context: Optional[SerializationContext] = None
+    ) -> Any:
         """Serialize to 'lhs operator rhs' string."""
-        with context.modify(inside_dollar_string=True, inside_parentheses=False):
-            lhs = self.expr_term.serialize(options, context)
-            operator = str(self.binary_term.binary_operator.serialize(options, context)).strip()
-            rhs = self.binary_term.expr_term.serialize(options, context)
+        options = options if options is not None else SerializationOptions()
+        context = context if context is not None else SerializationContext()
+        inner = context.replace(inside_dollar_string=True, inside_parentheses=False)
+        lhs = self.expr_term.serialize(options, inner)
+        operator = str(self.binary_term.binary_operator.serialize(options, inner)).strip()
+        rhs = self.binary_term.expr_term.serialize(options, inner)
 
         result = f"{lhs} {operator} {rhs}"
 
@@ -312,18 +328,22 @@ class UnaryOpRule(ExpressionRule):
         """Return the operand."""
         return self._children[1]
 
-    def serialize(self, options=SerializationOptions(), context=SerializationContext()) -> Any:
+    def serialize(
+        self, options: Optional[SerializationOptions] = None, context: Optional[SerializationContext] = None
+    ) -> Any:
         """Serialize to 'operator operand' string."""
+        options = options if options is not None else SerializationOptions()
+        context = context if context is not None else SerializationContext()
         # Clears the flag for the same reason ConditionalRule does. No input
         # reaches it here -- a unary operand is an `expr_term`, so an operation
         # inside one either carries its own parentheses or sits under a
         # container that clears the flag itself -- but the rule that an
-        # operation never hands `inside_parentheses` to its operands should
-        # hold for all three operation rules rather than two of them.
-        with context.modify(inside_dollar_string=True, inside_parentheses=False):
-            operator = self.operator.rstrip()
-            operand = self.expr_term.serialize(options, context)
-            result = f"{operator}{operand}"
+        # operation never hands `inside_parentheses` to its operands holds for
+        # all three operation rules rather than two of them.
+        inner = context.replace(inside_dollar_string=True, inside_parentheses=False)
+        operator = self.operator.rstrip()
+        operand = self.expr_term.serialize(options, inner)
+        result = f"{operator}{operand}"
 
         if not context.inside_dollar_string:
             # A negated numeric literal is a number, not an expression. The
