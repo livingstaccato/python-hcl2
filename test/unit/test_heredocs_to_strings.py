@@ -30,13 +30,13 @@ class TestTheOutputIsAQuotedValue(TestCase):
         return dumps(loads(source), deserializer_options=STRINGS)
 
     def test_a_plain_heredoc(self):
-        self.assertEqual(self._convert("a = <<EOT\nhello\nEOT\n"), 'a = "hello"\n')
+        self.assertEqual(self._convert("a = <<EOT\nhello\nEOT\n"), 'a = "hello\\n"\n')
 
     def test_a_trimmed_heredoc(self):
-        self.assertEqual(self._convert("a = <<-EOT\n  indented\n  EOT\n"), 'a = "indented"\n')
+        self.assertEqual(self._convert("a = <<-EOT\n  indented\n  EOT\n"), 'a = "indented\\n"\n')
 
     def test_quotes_in_the_body_are_escaped(self):
-        self.assertEqual(self._convert('a = <<EOT\nsay "hi"\nEOT\n'), 'a = "say \\"hi\\""\n')
+        self.assertEqual(self._convert('a = <<EOT\nsay "hi"\nEOT\n'), 'a = "say \\"hi\\"\\n"\n')
 
     def test_the_result_is_one_line(self):
         for source in ("a = <<EOT\nhello\nEOT\n", "a = <<EOT\none\ntwo\nEOT\n"):
