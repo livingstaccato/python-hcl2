@@ -2,7 +2,7 @@
 
 import re
 import sys
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Set, Tuple, Union
 
 from hcl2.rules.abstract import LarkRule
 from hcl2.rules.expressions import ExpressionRule
@@ -17,7 +17,13 @@ from hcl2.rules.tokens import (
     STRING_CHARS,
     TEMPLATE_STRING,
 )
-from hcl2.template import has_multi_line_span, map_literal_spans, resolve_escaped_markers
+from hcl2.template import (
+    INTERPOLATION,
+    has_multi_line_span,
+    map_literal_spans,
+    resolve_escaped_markers,
+    split_template,
+)
 from hcl2.utils import (
     HEREDOC_PATTERN,
     HEREDOC_TRIM_PATTERN,
@@ -52,6 +58,28 @@ def _strip_closing_marker_indent(text: str) -> str:
     and leaving those characters in place appended them to the value.
     """
     return re.sub(r"[^\S\n]*\Z", "", text)
+
+
+def _resolve_literal(text: str) -> str:
+    """Resolve a literal stretch of quoted source into the characters it means."""
+    return process_escape_sequences(text.replace("$${", "${").replace("%%{", "%{"))
+
+
+def _lines_starting_in_a_span(body: str) -> List[bool]:
+    """For each line of *body*, whether it starts inside a `${...}` span."""
+    starts: Set[int] = set()
+    offset = 0
+    for kind, chunk in split_template(body, heredoc=True):
+        if kind == INTERPOLATION:
+            # A newline inside the span begins a line of expression source.
+            starts.update(offset + index + 1 for index, char in enumerate(chunk) if char == "\n")
+        offset += len(chunk)
+    result = []
+    position = 0
+    for line in body.split("\n"):
+        result.append(position in starts)
+        position += len(line) + 1
+    return result
 
 
 def _escape_for_quoted_source(text: str) -> str:
@@ -176,14 +204,18 @@ class StringRule(LarkRule):
         if terminal == "STRING_CHARS":
             return process_escape_sequences(serialized)
         if terminal in ("ESCAPED_INTERPOLATION", "ESCAPED_DIRECTIVE"):
-            return serialized[1:]
+            # The token runs from the doubled sigil to the next `}`, and all
+            # of it is literal text: OpenTofu evaluates `"$${a\tb}"` to
+            # `${a<TAB>b}`, so the escapes after the sigil resolve too.
+            return process_escape_sequences(serialized[1:])
         # Anything else is a nested template rule -- a directive and everything
         # it encloses arrive as one part, so a marker written between `%{ if }`
         # and `%{ endif }` never reaches the branch above and stayed doubled,
-        # while the same content in a heredoc resolved. The helper is
-        # span-aware: it resolves the markers in the literal stretches and
-        # leaves the directives themselves, which are expression source, alone.
-        return resolve_escaped_markers(serialized)
+        # while the same content in a heredoc resolved. The literal stretches
+        # are resolved like any other literal text -- markers and escapes both:
+        # OpenTofu evaluates `"%{ if true }$${z}\t%{ endif }"` to `${z}<TAB>`.
+        # The directives themselves are expression source and left alone.
+        return map_literal_spans(serialized, _resolve_literal)
 
 
 class HeredocTemplateRule(LarkRule):
@@ -228,17 +260,17 @@ class HeredocTemplateRule(LarkRule):
                 # to come back as `upper("x")`, not `upper(x)`, which asks for a
                 # variable nobody declared. `StringRule` checks the same flag
                 # one class away, for the same reason.
-                return resolve_escaped_markers(heredoc)
+                return resolve_escaped_markers(heredoc, heredoc=True)
             # Only the literal spans are escaped. Inside `${...}` the text is
             # expression source, and escaping a quote there rewrites someone
             # else's code: `${upper("a")}` would become `${upper(\\"a\\")}`,
             # which OpenTofu rejects outright.
-            if has_multi_line_span(heredoc):
+            if has_multi_line_span(heredoc, heredoc=True):
                 # No quoted spelling exists, so the heredoc is handed back as
                 # it was written -- the same form `preserve_heredocs=True`
                 # produces, which reads back as this heredoc.
                 return f'"{raw.rstrip(self._trim_chars)}"'
-            return '"' + map_literal_spans(heredoc, _escape_for_quoted_source) + '"'
+            return '"' + map_literal_spans(heredoc, _escape_for_quoted_source, heredoc=True) + '"'
 
         result = heredoc.rstrip(self._trim_chars)
         if options.strip_string_quotes and not context.inside_dollar_string:
@@ -275,10 +307,10 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
             body = "\n".join(self._dedent(_strip_closing_marker_indent(match.group(2))))
             if options.strip_string_quotes and not context.inside_dollar_string:
                 # The caller asked for the value: real newlines, no escaping.
-                return resolve_escaped_markers(body)
-            if has_multi_line_span(body):
+                return resolve_escaped_markers(body, heredoc=True)
+            if has_multi_line_span(body, heredoc=True):
                 return f'"{raw.rstrip(self._trim_chars)}"'
-            return '"' + map_literal_spans(body, _escape_for_quoted_source) + '"'
+            return '"' + map_literal_spans(body, _escape_for_quoted_source, heredoc=True) + '"'
 
         result = heredoc.rstrip(self._trim_chars)
         if options.strip_string_quotes and not context.inside_dollar_string:
@@ -289,6 +321,11 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
     def _dedent(body: str) -> List[str]:
         """Split *body* into lines and remove the common leading whitespace."""
         lines = body.split("\n")
+        # A line that begins inside a `${...}` span is expression source, not
+        # a literal line start, so it neither sets the margin nor loses it.
+        # OpenTofu evaluates `<<-EOT\n    a ${\n  "b"\n    }\n    c\n    EOT`
+        # to `a b\nc\n`: the shallow `  "b"` does not drag the margin to two.
+        in_span = _lines_starting_in_a_span(body)
 
         # The margin is the smallest indent any content line carries.
         #
@@ -302,8 +339,8 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
         # alone matches it, and is identical to counting spaces on the
         # space-indented input that reading the letter of the spec would cover.
         margin = sys.maxsize
-        for line in lines:
-            if not line.strip():
+        for line, inside in zip(lines, in_span):
+            if inside or not line.strip():
                 continue
             margin = min(margin, len(line) - len(line.lstrip()))
         if margin == sys.maxsize:
@@ -312,7 +349,9 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
         # A line that offered no measurement is left exactly as written --
         # OpenTofu keeps a six-space line inside a four-space heredoc at six
         # spaces rather than two.
-        return [line[margin:] if line.strip() else line for line in lines]
+        return [
+            line[margin:] if line.strip() and not inside else line for line, inside in zip(lines, in_span)
+        ]
 
 
 class TemplateStringRule(LarkRule):
