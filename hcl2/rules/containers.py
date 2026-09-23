@@ -223,11 +223,19 @@ class ObjectRule(InlineCommentMixIn):
             return dict_result
 
         inner = context.replace(inside_dollar_string=True)
-        str_result = "{"
-        str_result += ", ".join(
+        items = [
             f"{element.key.serialize(options, inner)} = {element.expression.serialize(options, inner)}"
             for element in self.elements
-        )
+        ]
+        # An item that ends its line -- a heredoc does, through the newline
+        # after its closing marker -- is already separated from the next:
+        # OpenTofu takes a line break between object items and rejects a
+        # comma at the start of a line with "Invalid expression".
+        str_result = "{"
+        for index, item in enumerate(items):
+            if index and not items[index - 1].endswith("\n"):
+                str_result += ", "
+            str_result += item
         str_result += "}"
 
         if not context.inside_dollar_string:
