@@ -4,7 +4,10 @@ import re
 import sys
 from typing import Any, List, Optional, Set, Tuple, Union
 
+from lark.tree import Meta
+
 from hcl2.rules.abstract import LarkRule
+from hcl2.rules.directives import _insert_strip_optionals
 from hcl2.rules.expressions import ExpressionRule
 from hcl2.rules.tokens import (
     DBLQUOTE,
@@ -15,6 +18,7 @@ from hcl2.rules.tokens import (
     INTERP_START,
     RBRACE,
     STRING_CHARS,
+    STRIP_MARKER,
     TEMPLATE_STRING,
 )
 from hcl2.template import INTERPOLATION, LITERAL, map_literal_spans, split_template
@@ -170,9 +174,19 @@ class InterpolationRule(LarkRule):
 
     _children_layout: Tuple[
         INTERP_START,
+        Optional[STRIP_MARKER],
         ExpressionRule,
+        Optional[STRIP_MARKER],
         RBRACE,
     ]
+
+    def __init__(self, children, meta: Optional[Meta] = None):
+        # `${~ ...}` and `${... ~}` strip the whitespace beside the
+        # interpolation, exactly as they do beside a directive: OpenTofu
+        # evaluates `"a ${~ "b"} c"` to `ab c`. A missing marker is a None
+        # placeholder, so the expression keeps one index either way.
+        _insert_strip_optionals(children, [1, 3])
+        super().__init__(children, meta)
 
     @staticmethod
     def lark_name() -> str:
@@ -182,16 +196,29 @@ class InterpolationRule(LarkRule):
     @property
     def expression(self):
         """Return the interpolated expression."""
-        return self.children[1]
+        return self.children[2]
+
+    @property
+    def strip_open(self) -> bool:
+        """Whether a strip marker follows `${`."""
+        return self.children[1] is not None
+
+    @property
+    def strip_close(self) -> bool:
+        """Whether a strip marker precedes the closing `}`."""
+        return self.children[3] is not None
 
     def serialize(
         self, options: Optional[SerializationOptions] = None, context: Optional[SerializationContext] = None
     ) -> Any:
-        """Serialize to ${expression} string."""
+        """Serialize to `${expression}`, spelling any strip marker as a directive does."""
         options = options if options is not None else SerializationOptions()
         context = context if context is not None else SerializationContext()
         inner = context.replace(inside_dollar_string=True)
-        return to_dollar_string(self.expression.serialize(options, inner))
+        expression = self.expression.serialize(options, inner)
+        prefix = "~ " if self.strip_open else ""
+        suffix = " ~" if self.strip_close else ""
+        return to_dollar_string(f"{prefix}{expression}{suffix}")
 
 
 class StringPartRule(LarkRule):
