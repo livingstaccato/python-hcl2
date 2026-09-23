@@ -272,6 +272,13 @@ class HeredocTemplateRule(LarkRule):
                 return f'"{raw.rstrip(self._trim_chars)}"'
             return '"' + map_literal_spans(heredoc, _escape_for_quoted_source, heredoc=True) + '"'
 
+        if context.inside_dollar_string:
+            # An argument or operand is expression source, so the heredoc goes
+            # back as written. It keeps the newline after its closing marker:
+            # the token that follows has to start the next line, and
+            # `upper(<<EOF\nfoo\nEOF)` does not parse. Quoting it instead made a
+            # multi-line string, which OpenTofu rejects (#338).
+            return heredoc
         result = heredoc.rstrip(self._trim_chars)
         if options.strip_string_quotes and not context.inside_dollar_string:
             return result
@@ -312,6 +319,9 @@ class HeredocTrimTemplateRule(HeredocTemplateRule):
                 return f'"{raw.rstrip(self._trim_chars)}"'
             return '"' + map_literal_spans(body, _escape_for_quoted_source, heredoc=True) + '"'
 
+        if context.inside_dollar_string:
+            # Expression source; see `HeredocTemplateRule.serialize`.
+            return heredoc
         result = heredoc.rstrip(self._trim_chars)
         if options.strip_string_quotes and not context.inside_dollar_string:
             return result
