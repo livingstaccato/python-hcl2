@@ -490,3 +490,34 @@ class TestTheMetaHasRoomForLineNumbers(TestCase):
     def test_the_span_is_not_written(self):
         body = HclDict({"x": 1}, meta=HclMeta(is_block=True, start_line=1, end_line=3))
         self.assertEqual(dumps({"b": [body]}), "b {\n  x = 1\n}\n")
+
+
+class TestWithMetaPutsTheSpanInTheSidecar(TestCase):
+    """`with_meta` and `metadata_sidecar` together keep the span out of the mapping.
+
+    `with_meta` wrote `__start_line__`/`__end_line__` straight into the body,
+    and a sidecar body reserves no key -- so `dumps` wrote both out as real
+    attributes, and an attribute of either name was overwritten on load.
+    """
+
+    OPTIONS = SerializationOptions(with_meta=True, metadata_sidecar=True)
+    SOURCE = 'resource "a" "b" {\n  x = 1\n}\n'
+
+    def setUp(self):
+        self.body = loads(self.SOURCE, serialization_options=self.OPTIONS)["resource"][0]['"a"']['"b"']
+
+    def test_the_span_is_in_the_meta(self):
+        self.assertEqual((meta_of(self.body).start_line, meta_of(self.body).end_line), (1, 3))
+
+    def test_the_mapping_holds_attributes_only(self):
+        self.assertEqual(dict(self.body), {"x": 1})
+
+    def test_dumps_writes_no_line_keys(self):
+        written = dumps(loads(self.SOURCE, serialization_options=self.OPTIONS))
+        self.assertEqual(written, dumps(loads(self.SOURCE)))
+
+    def test_an_attribute_named_like_the_span_survives(self):
+        source = 'resource "a" "b" {\n  __start_line__ = 99\n}\n'
+        body = loads(source, serialization_options=self.OPTIONS)["resource"][0]['"a"']['"b"']
+        self.assertEqual(body["__start_line__"], 99)
+        self.assertEqual(meta_of(body).start_line, 1)

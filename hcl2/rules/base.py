@@ -185,8 +185,16 @@ class BlockRule(LarkRule):
             # innermost dict the labels nest around, which is where v7 put them.
             # A tree built by the deserializer carries no positions, so an empty
             # Meta means "no line numbers to report" rather than line zero.
+            #
+            # Under `metadata_sidecar` the span goes in the sidecar with the
+            # rest of the metadata. A sidecar body reserves no key, so written
+            # in-band it would be read back, and dumped, as two attributes.
             if not self._meta.empty:
-                result.update({START_LINE: self._meta.line, END_LINE: self._meta.end_line})
+                sidecar = meta_of(result)
+                if sidecar is not None:
+                    sidecar.start_line, sidecar.end_line = self._meta.line, self._meta.end_line
+                else:
+                    result.update({START_LINE: self._meta.line, END_LINE: self._meta.end_line})
 
         labels = self._labels
         for label in reversed(labels[1:]):

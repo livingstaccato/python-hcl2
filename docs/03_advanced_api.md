@@ -64,6 +64,10 @@ meta_of(body).comments      # [{"value": "..."}]
 meta_of({"plain": "dict"})  # None
 ```
 
+With `with_meta=True` as well, a block's line span goes to `start_line` and
+`end_line` on the same metadata rather than into `__start_line__`/`__end_line__`
+keys, so an attribute of either name survives too.
+
 `copy()`, `copy.copy`, `copy.deepcopy`, pickling and `|` keep the metadata;
 `dict(body)` and `{**body}` give the attributes alone. `dumps` accepts either
 form, including a hand-built dict using the in-band keys.

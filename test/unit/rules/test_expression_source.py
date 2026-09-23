@@ -157,17 +157,16 @@ class TestTheOtherModesAreUntouched(TestCase):
             loads("a = upper(<<E\nx\nE\n)\n", serialization_options=SOURCE)["a"], '${upper("x\\n")}'
         )
 
-    def test_default_options_keep_the_heredoc_as_quoted_source(self):
-        r"""The default still quotes the heredoc's own text, markers and all.
+    def test_default_options_keep_the_heredoc_a_heredoc(self):
+        r"""The default hands a heredoc argument back as the heredoc it is.
 
-        That form is not valid HCL -- Terraform rejects a quoted string split
-        over lines with "Invalid multi-line string", and a heredoc is a legal
-        argument as itself. Changing it needs the emitting side to give a
-        heredoc its own line first, which is #338; until then this asserts what
-        the default does rather than what it should, so the two fixes here stay
-        confined to the value form.
+        Quoting its own text, markers and all, was not valid HCL -- Terraform
+        rejects a quoted string split over lines with "Invalid multi-line
+        string". Emitting the heredoc needed the writer to give it its own line
+        first, which is #338; with that in place the heredoc keeps the newline
+        after its closing marker and the `)` starts the next line.
         """
-        self.assertEqual(loads("a = upper(<<E\nx\nE\n)\n")["a"], '${upper("<<E\nx\nE")}')
+        self.assertEqual(loads("a = upper(<<E\nx\nE\n)\n")["a"], "${upper(<<E\nx\nE\n)}")
 
     def test_the_default_dict_still_round_trips(self):
         # `dumps` has to read back whatever `loads` produced. Emitting the
