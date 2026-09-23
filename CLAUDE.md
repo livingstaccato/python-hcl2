@@ -26,6 +26,7 @@ The **Direct** pipeline (`parse_to_tree` → `transform` → `to_lark` → `reco
 | `hcl2/walk.py` | Generic tree-walking primitives for the LarkElement IR tree |
 | `hcl2/utils.py` | `SerializationOptions`, `SerializationContext`, string helpers |
 | `hcl2/template.py` | Splits template text into literal and `${...}`/`%{...}` spans, for quoted source or heredoc bodies |
+| `hcl2/meta.py` | `HclDict`, `HclMeta`, `meta_of` — metadata carried beside a body under `metadata_sidecar` |
 | `hcl2/const.py` | Constants: `IS_BLOCK`, `COMMENTS_KEY`, `INLINE_COMMENTS_KEY`, `START_LINE`, `END_LINE` |
 | `hcl2/cli/helpers.py` | File/directory/stdin conversion helpers |
 | `hcl2/cli/hcl_to_json.py` | `hcl2tojson` entry point |
@@ -76,11 +77,12 @@ Follows the `json` module convention. All option parameters are keyword-only.
 - `dump/dumps` — Python dict → HCL2 text
 - `query` — HCL2 text/file → `DocumentView` for structured queries
 - Intermediate stages: `parse/parses`, `parse_to_tree/parses_to_tree`, `transform`, `serialize`, `from_dict`, `from_json`, `reconstruct`
+- Metadata sidecar (`hcl2/meta.py`, exported from `hcl2`): `HclDict` (a `dict` whose `hcl_meta` holds the block marker and comments), `HclMeta`, and `meta_of(value)`, which returns the metadata or `None`
 
 ### Option Dataclasses
 
 **`SerializationOptions`** (LarkElement → dict):
-`with_comments`, `with_meta`, `wrap_objects`, `wrap_tuples`, `explicit_blocks`, `preserve_heredocs`, `force_operation_parentheses`, `preserve_scientific_notation`, `strip_string_quotes`
+`with_comments`, `with_meta`, `wrap_objects`, `wrap_tuples`, `explicit_blocks`, `preserve_heredocs`, `force_operation_parentheses`, `preserve_scientific_notation`, `strip_string_quotes`, `metadata_sidecar`
 
 **`DeserializerOptions`** (dict → LarkElement):
 `heredocs_to_strings`, `strings_to_heredocs`, `object_elements_colon`, `object_elements_trailing_comma`
