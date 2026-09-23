@@ -493,11 +493,29 @@ class BaseDeserializer(LarkElementTreeDeserializer):
         A container carrying its metadata beside the mapping reserves nothing:
         every key in it is an attribute the document declared, including one
         spelled `__is_block__`. Only the in-band form has to reserve the names,
-        and only there can it lose an attribute to one.
+        and only there can it lose an attribute to one. The line keys are
+        narrower still: see `_is_line_meta`.
         """
         if container is not None and meta_of(container) is not None:
             return False
-        return key in (IS_BLOCK, COMMENTS_KEY, INLINE_COMMENTS_KEY, START_LINE, END_LINE)
+        if key in (START_LINE, END_LINE):
+            return container is not None and self._is_line_meta(container)
+        return key in (IS_BLOCK, COMMENTS_KEY, INLINE_COMMENTS_KEY)
+
+    @staticmethod
+    def _is_line_meta(body: dict) -> bool:
+        """Whether *body* carries the line span `with_meta` writes.
+
+        The keys travel in-band, beside the block's attributes, so an attribute
+        of either name cannot be told apart from them. `with_meta` only ever
+        writes both, as integers, on a block's body; reading the keys as
+        metadata anywhere else would drop attributes that nothing reserved
+        before the option produced them.
+        """
+        if not body.get(IS_BLOCK):
+            return False
+        values = (body.get(START_LINE), body.get(END_LINE))
+        return all(isinstance(v, int) and not isinstance(v, bool) for v in values)
 
     def _is_marked_block(self, body: dict) -> bool:
         """Whether *body* is itself a block, in whichever form marks it."""

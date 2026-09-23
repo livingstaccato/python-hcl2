@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
+- Python 3.14 is now tested and declared as supported. No source changes were needed; the full
+  suite passes on 3.14 as-is.
 - `BlockView.start_line` and `BlockView.end_line`, so a block's span can be read from the query API without serializing it. `with_meta` puts the numbers in the output dict, which meant reaching them through the label nesting, or through the rule's private `_meta`. Both are `None` for a tree built by the deserializer, which carries no positions. `hq` picks them up through its property accessors: `hq 'resource[*] | .start_line' main.tf`. Thanks, @livingstaccato ([#333](https://github.com/amplify-education/python-hcl2/pull/333))
 
 ### Fixed
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `strip_string_quotes` now writes a heredoc inside an expression as a string instead of splicing its body in bare. `StringRule` checks `inside_dollar_string` to keep its quotes for exactly this reason; the heredoc rules did not, so `upper(<<E\nx\nE\n)` came back as `${upper(x)}` — a reference to a variable nobody declared — and a multi-line body put raw newlines into source that would not parse. Both `<<` and `<<-` are fixed, in every expression context. Thanks, @livingstaccato ([#350](https://github.com/amplify-education/python-hcl2/pull/350))
 - `strip_string_quotes` now keeps the delimiters of a string literal inside a template directive. `TemplateStringRule` only ever appears inside `%{ ... }`, where the text is expression source and the quotes belong to a literal written in it, so dropping them turned `%{ if x == "y" }` into `%{ if x == y }`: a comparison against a variable rather than against a string. Thanks, @livingstaccato ([#350](https://github.com/amplify-education/python-hcl2/pull/350))
 - `heredocs_to_strings` writes the heredoc's value rather than its own text. It was quoting the source -- markers and all -- so `<<EOT\nhello\nEOT` became `"<<EOT\nhello\nEOT"`, a quoted string spanning three physical lines. A quoted template cannot span lines, so OpenTofu rejects that with "Invalid multi-line string", and reading it back here gave the marker text rather than the value: neither a valid file nor the right content. It now reuses the flattening the reader already performs, so the two cannot drift. ([#337](https://github.com/amplify-education/python-hcl2/issues/337))
+  - The deserializer reads `__start_line__` and `__end_line__` as metadata only where `with_meta` writes them: together, as integers, on a block's body. An attribute of either name anywhere else still survives `dumps(loads(...))`, as it did before. A block that declares both with integer values cannot be told apart from the metadata and loses them; [#331](https://github.com/amplify-education/python-hcl2/issues/331) tracks moving the keys out of band.
 
 ### Changed
 
