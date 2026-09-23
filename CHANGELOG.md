@@ -79,6 +79,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+### Fixed
+
+- `strip_string_quotes` now writes a heredoc inside an expression as a string instead of splicing its body in bare. `StringRule` checks `inside_dollar_string` to keep its quotes for exactly this reason; the heredoc rules did not, so `upper(<<E\nx\nE\n)` came back as `${upper(x)}` — a reference to a variable nobody declared — and a multi-line body put raw newlines into source that would not parse. Both `<<` and `<<-` are fixed, in every expression context. Thanks, @livingstaccato ([#350](https://github.com/amplify-education/python-hcl2/pull/350))
+- `strip_string_quotes` now keeps the delimiters of a string literal inside a template directive. `TemplateStringRule` only ever appears inside `%{ ... }`, where the text is expression source and the quotes belong to a literal written in it, so dropping them turned `%{ if x == "y" }` into `%{ if x == y }`: a comparison against a variable rather than against a string. Thanks, @livingstaccato ([#350](https://github.com/amplify-education/python-hcl2/pull/350))
+
+## \[8.1.4\] - 2026-09-08
+
+### Fixed
+
 - Parse blocks whose type or unquoted label is an HCL keyword, such as the `in` block in Snowflake's `snowflake_schemas` data source. HCL reserves no keywords, so all are now accepted as block labels. Diagnosed independently in [#355](https://github.com/amplify-education/python-hcl2/pull/355). ([#357](https://github.com/amplify-education/python-hcl2/pull/357))
 - Parse keyword-named *object* keys reliably, fixing a regression of [#148](https://github.com/amplify-education/python-hcl2/issues/148). A key such as `in` parsed only where the lexer fell back to `NAME`, so its separator and position decided whether the file parsed. ([#357](https://github.com/amplify-education/python-hcl2/pull/357))
 
