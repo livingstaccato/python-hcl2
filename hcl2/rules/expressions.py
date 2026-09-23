@@ -111,7 +111,17 @@ class ExprTermRule(ExpressionRule):
         # is parenthesised". Clearing it in the operation rules is what lets
         # the option reach inside; this keeps the flag matching its meaning at
         # the source, so a term that is not itself wrapped never claims to be.
-        inner = context.replace(inside_parentheses=self.parentheses)
+        #
+        # A parenthesised term is written as `${(...)}`, so what it wraps is
+        # expression source, exactly as a function's arguments are. Serialized
+        # as a value, `(true)` came back as `${(True)}` and `(null)` as
+        # `${(None)}` -- Python's spelling, which OpenTofu reads as references
+        # to undeclared variables -- and a tuple or object inside came back as
+        # a Python repr that did not parse.
+        inner = context.replace(
+            inside_parentheses=self.parentheses,
+            inside_dollar_string=self.parentheses or context.inside_dollar_string,
+        )
         result = self.expression.serialize(options, inner)
 
         if self.parentheses:
